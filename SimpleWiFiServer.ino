@@ -1,115 +1,125 @@
-/*
- WiFi Web Server LED Blink
-
- A simple web server that lets you blink an LED via the web.
- This sketch will print the IP address of your WiFi Shield (once connected)
- to the Serial monitor. From there, you can open that address in a web browser
- to turn on and off the LED on pin 5.
-
- If the IP address of your shield is yourAddress:
- http://yourAddress/H turns the LED on
- http://yourAddress/L turns it off
-
- This example is written for a network using WPA encryption. For
- WEP or WPA, change the Wifi.begin() call accordingly.
-
- Circuit:
- * WiFi shield attached
- * LED attached to pin 5
-
- created for arduino 25 Nov 2012
- by Tom Igoe
-
-ported for sparkfun esp32 
-31.01.2017 by Jan Hendrik Berlin
- 
- */
+#include <ArduinoWebsockets.h>
 #include <WiFi.h>
 
-const char* ssid     = "Nordnet_GISSINGER";
-const char* password = "6R37UR3E";
+#define CLOSE_STATE		0
+#define CLOSING_STATE	1
+#define OPENNING_STATE	2
+#define OPEN_STATE		3
 
-WiFiServer server(80);
+#define BOTTOM_SWITCH	12
+#define TOP_SWITCH		13
+#define RELAY_1			2
+#define RELAY_2			4
 
-void setup()
+const char *ssid =		"Nordnet_GISSINGER";
+const char *password =	"6R37UR3E";
+volatile char DOOR_STATE = CLOSE_STATE;
+volatile bool NOTIFIED = true;
+
+using namespace websockets;
+WebsocketsServer server;
+WebsocketsClient client;
+
+void	setup()
 {
-    Serial.begin(115200);
-    pinMode(LED_BUILTIN, OUTPUT);      // set the LED pin mode
+	Serial.begin(115200);
+	pinMode(RELAY_1, OUTPUT);
+	pinMode(RELAY_2, OUTPUT);
+	pinMode(LED_BUILTIN, OUTPUT);
+	attachInterrupt(TOP_SWITCH, openned_event, RISING);
+	attachInterrupt(BOTTOM_SWITCH, closed_event, RISING);
 
-    delay(10);
+	// Start LED for debugging
+	digitalWrite(LED_BUILTIN, HIGH);
 
-    // We start by connecting to a WiFi network
+	// Connect to wifi
+	WiFi.begin(ssid, password);
 
-    Serial.println();
-    Serial.println();
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
+	// Wait some time to connect to wifi
+	for (int i = 0; i < 15 && WiFi.status() != WL_CONNECTED; i++)
+	{
+		Serial.print(".");
+		delay(1000);
+	}
 
-    WiFi.begin(ssid, password);
+	Serial.println("");
+	Serial.println("WiFi connected");
+	Serial.println("IP address: ");
+	Serial.println(WiFi.localIP());
 
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
+	server.listen(80);
+	Serial.print("Is server live? ");
+	Serial.println(server.available());
 
-    Serial.println("");
-    Serial.println("WiFi connected.");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-    
-    server.begin();
-
+	// All done so LED is off now
+	digitalWrite(LED_BUILTIN, LOW);
 }
 
-int value = 0;
+void	loop()
+{
+	if (!client.available())
+		client = server.accept();
+	else if (DOOR_STATE == OPEN_STATE || DOOR_STATE == CLOSE_STATE)
+	{
+		if (!NOTIFIED) notify_client();
+		WebsocketsMessage msg = client.readBlocking();
+		Serial.print("Got Message: ");
+		Serial.println(msg.data());
 
-void loop(){
- WiFiClient client = server.available();   // listen for incoming clients
+		if (msg.data() == "OPEN_DOOR")
+			client.send(open_door());
+		else if (msg.data() == "CLOSE_DOOR")
+			client.send(close_door());
+		else if (msg.data())
+			client.send("NOT_UNDERSTOOD");
+	}
+	delay(1000);
+}
 
-  if (client) {                             // if you get a client,
-    Serial.println("New Client.");           // print a message out the serial port
-    String currentLine = "";                // make a String to hold incoming data from the client
-    while (client.connected()) {            // loop while the client's connected
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out the serial monitor
-        if (c == '\n') {                    // if the byte is a newline character
+void	notify_client()
+{
+	if (DOOR_STATE == OPEN_STATE)
+		client.send("DOOR_OPENED");
+	else if (DOOR_STATE == CLOSE_STATE)
+		client.send("DOOR_CLOSED");
+}
 
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println();
+char	*close_door()
+{
+	if (DOOR_STATE != OPEN_STATE)
+		return "STATE_ERROR";
+	digitalWrite(RELAY_1, HIGH);
+	DOOR_STATE = CLOSING_STATE;
+	return "CLOSING_DOOR";
+}
 
-            // the content of the HTTP response follows the header:
-            client.print("Click <a href=\"/H\">here</a> to turn the LED on pin 5 on.<br>");
-            client.print("Click <a href=\"/L\">here</a> to turn the LED on pin 5 off.<br>");
+char	*open_door()
+{
+	if (DOOR_STATE != CLOSE_STATE)
+		return "STATE_ERROR";
+	digitalWrite(RELAY_2, HIGH);
+	DOOR_STATE = OPENNING_STATE;
+	return "OPENNING_DOOR";
+}
 
-            // The HTTP response ends with another blank line:
-            client.println();
-            // break out of the while loop:
-            break;
-          } else {    // if you got a newline, then clear currentLine:
-            currentLine = "";
-          }
-        } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
-        }
+void	openned_event()
+{
+	if (DOOR_STATE != OPENNING_STATE)
+		return
+	digitalWrite(RELAY_2, LOW);
+	digitalWrite(RELAY_1, LOW);
+	DOOR_STATE = OPEN_STATE;
+	NOTIFIED = false;
+	Serial.println("DOOR_OPENNED");
+}
 
-        // Check to see if the client request was "GET /H" or "GET /L":
-        if (currentLine.endsWith("GET /H")) {
-          digitalWrite(LED_BUILTIN, HIGH);               // GET /H turns the LED on
-        }
-        if (currentLine.endsWith("GET /L")) {
-          digitalWrite(LED_BUILTIN, LOW);                // GET /L turns the LED off
-        }
-      }
-    }
-    // close the connection:
-    client.stop();
-    Serial.println("Client Disconnected.");
-  }
+void	closed_event()
+{
+	if (DOOR_STATE != CLOSING_STATE)
+		return
+	digitalWrite(RELAY_1, LOW);
+	digitalWrite(RELAY_2, LOW);
+	DOOR_STATE = CLOSE_STATE;
+	NOTIFIED = false;
+	Serial.println("DOOR_CLOSE");
 }
