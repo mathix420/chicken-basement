@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poulailler</title>
+</head>
+<body>
+    <input type="text" id="ip">
+    <button onclick="connect()">CONNECT</button>
+    <button onclick="open_door()">OPEN</button>
+    <button onclick="close_door()">CLOSE</button>
+    <p id="data"></p>
+    <script>
+        let ws;
+        function connect() {
+            try {
+                const ip = document.getElementById('ip').value;
+                alert(ip);
+                ws = new WebSocket(ip);
+                ws.onmessage = (message) => {
+                    document.getElementById('data').innerText = message.data
+                };
+            } catch (error) {
+                alert(String(error))
+            }
+        }
+        function open_door() {
+            try {
+                ws.send('OPEN_DOOR');
+            } catch (error) {
+                alert(String(error))
+            }
+        }
+        function close_door() {
+            try {
+                ws.send('CLOSE_DOOR');
+            } catch (error) {
+                alert(String(error))
+            }
+        }
+    </script>
+</body>
+</html>

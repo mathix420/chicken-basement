@@ -8,8 +8,9 @@
 
 #define BOTTOM_SWITCH	12
 #define TOP_SWITCH		13
-#define RELAY_1			2
-#define RELAY_2			4
+#define RELAY_1			14
+#define RELAY_2			15
+#define LED_BUILTIN		4
 
 const char *ssid =		"Nordnet_GISSINGER";
 const char *password =	"6R37UR3E";
@@ -30,6 +31,8 @@ void	setup()
 	attachInterrupt(BOTTOM_SWITCH, closed_event, RISING);
 
 	// Start LED for debugging
+	digitalWrite(RELAY_1, HIGH);
+	digitalWrite(RELAY_2, HIGH);
 	digitalWrite(LED_BUILTIN, HIGH);
 
 	// Connect to wifi
@@ -88,7 +91,7 @@ char	*close_door()
 {
 	if (DOOR_STATE != OPEN_STATE)
 		return "STATE_ERROR";
-	digitalWrite(RELAY_1, HIGH);
+	digitalWrite(RELAY_1, LOW);
 	DOOR_STATE = CLOSING_STATE;
 	return "CLOSING_DOOR";
 }
@@ -97,7 +100,7 @@ char	*open_door()
 {
 	if (DOOR_STATE != CLOSE_STATE)
 		return "STATE_ERROR";
-	digitalWrite(RELAY_2, HIGH);
+	digitalWrite(RELAY_2, LOW);
 	DOOR_STATE = OPENNING_STATE;
 	return "OPENNING_DOOR";
 }
@@ -106,8 +109,8 @@ void	openned_event()
 {
 	if (DOOR_STATE != OPENNING_STATE)
 		return
-	digitalWrite(RELAY_2, LOW);
-	digitalWrite(RELAY_1, LOW);
+	digitalWrite(RELAY_2, HIGH);
+	digitalWrite(RELAY_1, HIGH);
 	DOOR_STATE = OPEN_STATE;
 	NOTIFIED = false;
 	Serial.println("DOOR_OPENNED");
@@ -117,8 +120,8 @@ void	closed_event()
 {
 	if (DOOR_STATE != CLOSING_STATE)
 		return
-	digitalWrite(RELAY_1, LOW);
-	digitalWrite(RELAY_2, LOW);
+	digitalWrite(RELAY_1, HIGH);
+	digitalWrite(RELAY_2, HIGH);
 	DOOR_STATE = CLOSE_STATE;
 	NOTIFIED = false;
 	Serial.println("DOOR_CLOSE");
