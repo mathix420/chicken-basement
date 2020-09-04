@@ -16,29 +16,45 @@
         let ws;
         function connect() {
             try {
+                document.getElementById('data').innerText = "Connecting ...";
                 const ip = document.getElementById('ip').value;
-                alert(ip);
                 ws = new WebSocket(ip);
+                ws.onerror = (error) => {
+                    document.getElementById('data').innerText = `${error.type} on ${error.currentTarget}`;
+                };
+                ws.onopen = () => {
+                    document.getElementById('data').innerText = "WS CONNECTED!";
+                };
+                ws.onclose = () => {
+                    document.getElementById('data').innerText = "WS CLOSED!";
+                };
                 ws.onmessage = (message) => {
-                    document.getElementById('data').innerText = message.data
+                    document.getElementById('data').innerText = message.data;
                 };
             } catch (error) {
-                alert(String(error))
+                alert(String(error));
             }
         }
         function open_door() {
             try {
                 ws.send('OPEN_DOOR');
             } catch (error) {
-                alert(String(error))
+                alert(String(error));
             }
         }
         function close_door() {
             try {
                 ws.send('CLOSE_DOOR');
             } catch (error) {
-                alert(String(error))
+                alert(String(error));
             }
+        }
+
+        try {
+            const url = new URL(window.location.href);
+            document.getElementById('ip').value = url.searchParams.get("ws")
+        } catch (error) {
+            console.log(error);
         }
     </script>
 </body>
